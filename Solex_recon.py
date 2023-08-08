@@ -160,6 +160,50 @@ def single_image_process(frame_circularized, hdr, options, cercle0, borders, bas
         if not cercle == (-1, -1, -1):
             cercle = (nw2, cercle[1], cercle[2])
         detransversaliumed = new_img    
-   
+        
+        #--- MattC start of resize code
+        #https://stackoverflow.com/questions/15589517/how-to-crop-an-image-in-opencv-using-python
+        def pad_img_to_fit_bbox(img, x1, x2, y1, y2):
+            img = cv2.copyMakeBorder(img, - min(0, y1), max(y2 - img.shape[0], 0),
+                                     -min(0, x1), max(x2 - img.shape[1], 0), cv2.BORDER_REPLICATE)
+
+            y2 += -min(0, y1)
+            y1 += -min(0, y1)
+            x2 += -min(0, x1)
+            x1 += -min(0, x1)
+            return img, x1, x2, y1, y2
+
+        def imcrop(img, bbox):
+            x1, y1, x2, y2 = bbox
+            if x1 < 0 or y1 < 0 or x2 > img.shape[1] or y2 > img.shape[0]:
+                img, x1, x2, y1, y2 = pad_img_to_fit_bbox(img, x1, x2, y1, y2)
+            return img[y1:y2, x1:x2]
+
+        #if options['radiusgoal'] > 0 :
+        if 1: #force this to be done to test.  Want a 900 pixel radius solar disc AND 2400 pixel wide canvas
+            print("Circle ",cercle)
+            scalefactor = 900/ cercle[2] #options['radiusgoal'] / cercle[2]
+            new_frame_width = int(detransversaliumed.shape[1] * scalefactor)
+            new_frame_height = int(detransversaliumed.shape[0] * scalefactor)
+            new_frame_dimension = (new_frame_width, new_frame_height)
+            y = list(cercle)
+            y[2] = 900 #options['radiusgoal']
+            y[1] = int(y[1]*scalefactor)
+            y[0] = int(y[0]*scalefactor)
+            cercle = tuple(y)
+            #detransversaliumed, cercle0, options['ratio_fixe'], phi, borders = ellipse_to_circle(detransversaliumed, options, basefich)
+            detransversaliumed = cv2.resize(detransversaliumed, new_frame_dimension, interpolation=cv2.INTER_CUBIC)
+            #desired upper left x1,y1, lower right x2,y2
+            roi = ( int(new_frame_width/2 - (2*900+600)/2), 0, #could use existing width field in UI???
+                    int(new_frame_width/2 + (2*900+600)/2), new_frame_height)
+            #print("DT shape ",detransversaliumed.shape)
+            #print("ROI ",roi)
+            detransversaliumed = imcrop(detransversaliumed,roi)
+            if options['save_fit'] :
+                DiskHDU = fits.PrimaryHDU(detransversaliumed, header=hdr)
+                DiskHDU.writeto(basefich + '_dtresized.fits', overwrite='True')
+            #print(basefich+'_dtresized.png')
+            cv2.imwrite(basefich+'_dtresized.png',detransversaliumed) #want this for hugin stitching and exposure balancing
+        #--- MattC end of resize code
 
     return image_process(detransversaliumed, cercle, options, hdr, basefich)
