@@ -1,7 +1,7 @@
 """
 @author: Andrew Smith
 contributors: Valerie Desnoux, Jean-Francois Pittet
-Version 6 August 2023
+Version 24 September 2023
 
 """
 from numpy import polynomial
@@ -161,11 +161,17 @@ def get_flood_image(image):
     print(image.shape[1])
     blur_width = int(image.shape[0] * 0.01)
     img_blurred = cv2.blur(image, ksize=(blur_width, blur_width))
-    n, bins = np.histogram(img_blurred.flatten(), bins=20)
+
+    very_bright = np.percentile(img_blurred, 99)
+    print(f"very bright: {very_bright}")
+    data = img_blurred.flatten()
+    data = data[data < very_bright]
+    n, bins = np.histogram(data, bins=20)
     '''
     plt.hist(img_blurred.flatten(), bins=20)
     plt.show()
     '''
+    
     # fit the histogram to a cubic graph
     coeff = polynomial.polynomial.Polynomial.fit(bins[1:], n, 3).convert().coef
     print('cubic fit coeffs. :', coeff)
@@ -307,7 +313,7 @@ def ellipse_to_circle(image, options, basefich):
     X_f3_t = (np.linalg.inv(mat3) @ X_f3.T).T
     borders = [np.min(X_f3_t[:, 0]), np.min(X_f3_t[:, 1]), np.max(X_f3_t[:, 0]), np.max(X_f3_t[:, 1])]
     print('sun borders found:' + str(borders))
-    if (not options['clahe_only']):
+    if not options['clahe_only'] and not options['protus_only']:
         fig = matplotlib.figure.Figure()
         ax = [[fig.add_subplot(2, 2, 1), fig.add_subplot(2, 2, 2)], [fig.add_subplot(2, 2, 3), fig.add_subplot(2, 2, 4)]]
         #fig, ax = plt.subplots(ncols=2, nrows=2)

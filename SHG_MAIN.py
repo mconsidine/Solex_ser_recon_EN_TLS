@@ -3,7 +3,7 @@
 @author: Andrew Smith
 based on code by Valerie Desnoux
 contributors: Jean-Francois Pittet, Jean-Baptiste Butet, Pascal Berteau, Matt Considine
-Version 6 August 2023
+Version 24 September 2023
 
 --------------------------------------------------------------
 Front end of spectroheliograph processing of SER and AVI files
@@ -46,10 +46,12 @@ options = {
     'slant_fix' : None ,            #
     'save_fit' : False,             # argument: f
     'clahe_only' : False,           # argument: c
+    'protus_only': False,
     'disk_display' : True,          # argument: p
     'delta_radius' : 0,             #
     'crop_width_square' : False,    # argument: s
     'transversalium' : True,        # argument: t
+    'stubborn_transversalium': False,
     'trans_strength': 301,          #
     'img_rotate': 0,                #
     'flip_x': False,                # argument: m
@@ -60,7 +62,9 @@ options = {
     'specDir': '',                  # for spectral analyser
     'selected_mode': 'File input mode',
     'continuous_detect_mode': False,#
-    'dispersion':0.05               # for spectral analyser
+    'dispersion':0.05,              # for spectral analyser
+    'ellipse_fit_shift':10,         # secret parameter for ellipse fit
+    'de-vignette':False             # remove vigenette
 }
 
 

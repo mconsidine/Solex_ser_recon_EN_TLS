@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @author: Andrew Smith
-Version 6 August 2023
+Version 24 September 2023
 
 ------------------------------------------------------------------------
 Spectral Analyser
@@ -99,12 +99,12 @@ def analyseSpectrum(options, file, lang_dict):
     
     layout = [
           
-        [sg.T('Anchor line'), c1, sg.T('GOTO line'), c2, sg.T("GOTO wavelength(Å)"), in1, sg.T('Pixel shift', key='shift:'), s1, sg.T("Wavelength shift: None", key="Ångstrom Shift:")],
+        [sg.T('Anchor line'), c1, sg.T('GOTO line'), c2, sg.T("GOTO wavelength (Å)"), in1, sg.T('Pixel shift', key='shift:'), s1, sg.T("Wavelength shift: None", key="Ångstrom Shift:")],
         [sg.T('Dispersion (Å/pixel)'), in2, sg.B('Auto dispersion')],
         [sg.Canvas(size=(1000, 800), key='canvas')],
     ]
 
-    window = sg.Window('Pixel Offset Live', layout_file_input+layout, finalize=True, resizable=True, keep_on_top=False)
+    window = sg.Window('Spectral Analyser', layout_file_input+layout, finalize=True, resizable=True, keep_on_top=False)
     # needed to access the canvas element prior to reading the window
     window['-shift-'].bind("<Return>", "_Enter")
     window['-ashift-'].bind("<Return>", "_Enter")
@@ -150,6 +150,7 @@ def analyseSpectrum(options, file, lang_dict):
                 file = values['-FILE2-'].split(';')[0]
                 window['-FILE2-'].update(file)
                 options['specDir'] = os.path.dirname(file)
+                window['Choose file'].InitialFolder = options['specDir']
                 options_orig['specDir'] = os.path.dirname(file) # this is to feed back into SHG config
                 all_rdr = all_video_reader(file)
                 
@@ -157,7 +158,6 @@ def analyseSpectrum(options, file, lang_dict):
                 iw = all_rdr.iw
                 hdr = make_header(all_rdr)
                 mean, fit, y1, y2 = compute_mean_return_fit(all_rdr, options, hdr, iw, ih, '')
-
                 target_height = max(1000, ih / 3)
                 downscale_f = target_height / ih
                 
@@ -166,7 +166,7 @@ def analyseSpectrum(options, file, lang_dict):
                 spectrum2 = mean[mean.shape[0]//2, :] 
                 backup_bounds = (int(y1), int(y2))
                 if options['ratio_fixe'] is None and options['slant_fix'] is None:
-                    options['shift'] = [10]
+                    options['shift'] = [options['ellipse_fit_shift']]
                     all_rdr.reset()
                     disklist,_,_,_ = read_video_improved(all_rdr, fit, options)
                     if options['flip_x']:
@@ -190,10 +190,16 @@ def analyseSpectrum(options, file, lang_dict):
                     j = anchors.index(values['-anchor-'])
                     anchor_guess = anchor_cands[j]
                     shift = int((gotolambda - anchor_guess)/dispersion)
-                    if 0 <= shift + fit[len(fit)//2][0]+fit[len(fit)//2][1] < spectrum2.shape[0]:          
+                    positions = shift + fit[:, 3]
+                    print(positions, positions >= 0)
+                    is_within = np.logical_and(0 <= positions, positions <= spectrum2.shape[0])
+                    print(is_within)
+                    if is_within.any():       
                         options['shift'] = [shift]
                         window['-shift-'].update(shift)
                         display_refresh = True
+                        if np.logical_not(is_within).any():
+                            sg.Popup("Warning: Line is only partially within frame")
                     else:
                         sg.Popup("That line does not appear to be in image!", keep_on_top=True)
                 except:
@@ -239,12 +245,17 @@ def analyseSpectrum(options, file, lang_dict):
                 anchor_guess = anchor_cands[j]
                 i = targets.index(values['-target-'])
                 shift = int((target_nums[i] - anchor_guess)/dispersion)
-                if 0 <= shift + fit[len(fit)//2][0]+fit[len(fit)//2][1] < spectrum2.shape[0]:          
+                positions = shift + fit[:, 3]
+                is_within = np.logical_and(0 <= positions, positions <= spectrum2.shape[0])
+                if is_within.any():       
                     options['shift'] = [shift]
                     window['-shift-'].update(shift)
                     display_refresh = True
+                    if np.logical_not(is_within).any():
+                        sg.Popup("Warning: Line is only partially within frame")
                 else:
                     sg.Popup("That line does not appear to be in image!", keep_on_top=True)
+                
             
         if display_refresh:   
             ax1.cla()
@@ -260,8 +271,8 @@ def analyseSpectrum(options, file, lang_dict):
                 # fit anchor:
                 if anchor_refresh:
                     if values['-anchor-']:
-                        anchor_x = fit[len(fit)//2][0]+fit[len(fit)//2][1]
-                        scale_guesses = np.linspace(0.03, 0.12, spectrum2.shape[0]*2)
+                        anchor_x = fit[fit.shape[0]//2, 3]
+                        scale_guesses = np.linspace(0.02, 0.12, spectrum2.shape[0]*3)
                         #scale_guesses = [0.057]
                         i = anchors.index(values['-anchor-'])
                         anchor_guess = anchor_cands[i]
@@ -293,14 +304,14 @@ def analyseSpectrum(options, file, lang_dict):
                 if dispersion is None:
                     ax2.plot(np.log(spectrum2), color='green', label='data')
                     ax2.set_xlim((0, spectrum.shape[0]-1))
-                    ax2.axvline(x=fit[len(fit)//2][0]+fit[len(fit)//2][1]+options['shift'][0], color='red', linestyle='--')
-                    ax2.axvline(x=fit[len(fit)//2][0]+fit[len(fit)//2][1], color='blue')
+                    ax2.axvline(x=fit[fit.shape[0]//2, 3]+options['shift'][0], color='red', linestyle='--')
+                    ax2.axvline(x=fit[fit.shape[0]//2, 3], color='blue')
                     ax2.legend()
                 else:
                     # update plot
                     i = anchors.index(values['-anchor-'])
                     anchor_val = anchor_cands[i]
-                    anchor_px = fit[len(fit)//2][0]+fit[len(fit)//2][1]
+                    anchor_px = fit[fit.shape[0]//2, 3]
                     hi_clip = (spectrum2.shape - anchor_px) * dispersion + anchor_val
                     low_clip = (-anchor_px) * dispersion + anchor_val
                     
@@ -327,8 +338,8 @@ def analyseSpectrum(options, file, lang_dict):
                 
                     
                 ax1.imshow(mean, cmap='gray', aspect='auto')
-                ax1.plot([x[0]+x[1]+options['shift'] for x in fit], range(ih), 'r--')
-                ax1.plot([x[0]+x[1] for x in fit], range(ih), 'b')
+                ax1.plot(fit[:, 3] + options['shift'], range(ih), 'r--')
+                ax1.plot(fit[:, 3], range(ih), 'b')
                 ax1.set_xlim((0, mean.shape[1]-1))
                          
                 all_rdr.reset()
@@ -340,6 +351,11 @@ def analyseSpectrum(options, file, lang_dict):
                 ratio = options['ratio_fixe'] if not options['ratio_fixe'] is None else 1.0
                 phi = math.radians(options['slant_fix']) if not options['slant_fix'] is None else 0.0
                 frame_circularized = correct_image(downscale(disklist[0], downscale_f) / 65536, phi, ratio, np.array([-1.0, -1.0]), -1.0, options, print_log=False)[0]  # Note that we assume 16-bit
+                if options['de-vignette']:
+                    if cercle0 == (-1, -1, -1):
+                        print("WARNING: cannot de-vignette without ellipse fit")
+                    else:
+                        frame_circularized = removeVignette(frame_circularized, tuple_downscale(cercle0, downscale_f) if not cercle0 == (-1, -1, -1) else (-1, -1, -1))
                 clahe, protus = single_image_process(frame_circularized, hdr, options, tuple_downscale(cercle0, downscale_f) if not cercle0 == (-1, -1, -1) else (-1, -1, -1), tuple_downscale(borders, downscale_f), '', tuple_downscale(backup_bounds, downscale_f))
           
                 ax3.imshow(clahe, cmap='gray', aspect='equal')
@@ -360,6 +376,11 @@ def analyseSpectrum(options, file, lang_dict):
                 ratio = options['ratio_fixe'] if not options['ratio_fixe'] is None else 1.0
                 phi = math.radians(options['slant_fix']) if not options['slant_fix'] is None else 0.0
                 frame_circularized = correct_image(disk_memo / 65536, phi, ratio, np.array([-1.0, -1.0]), -1.0, options, print_log=False)[0]  # Note that we assume 16-bit
+                if options['de-vignette']:
+                    if cercle0 == (-1, -1, -1):
+                        print("WARNING: cannot de-vignette without ellipse fit")
+                    else:
+                        frame_circularized = removeVignette(frame_circularized, cercle0)
                 clahe, protus = single_image_process(frame_circularized, hdr, options, cercle0, borders, '', backup_bounds)
                 compression = 0
                 basename = os.path.splitext(file)[0] + '_shift='+str(options['shift'][0])

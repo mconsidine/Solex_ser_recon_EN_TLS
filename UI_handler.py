@@ -2,7 +2,7 @@
 @author: Andrew Smith
 based on code by Valerie Desnoux
 contributors: Jean-Francois Pittet, Jean-Baptiste Butet, Pascal Berteau, Matt Considine
-Version 6 August 2023
+Version 24 September 2023
 """
 
 import math
@@ -51,19 +51,27 @@ def interpret_UI_values(options, ui_values, no_file = False):
         options['disk_display'] = True
     except ValueError:
         raise Exception('invalid protus_radius_adjustment')
+    try : 
+        options['ellipse_fit_shift'] = int(ui_values['ellipse_fit_shift']) if ui_values['ellipse_fit_shift'] else 10
+    except ValueError : 
+        raise Exception('invalid ellipse_fit_shift!')
     options['save_fit'] = ui_values['Save fits files']
     options['clahe_only'] = ui_values['Save clahe.png only']
+    options['protus_only'] = ui_values['Save protus.png only']
     options['crop_width_square'] = ui_values['Crop square']
     options['transversalium'] = ui_values['Correct transversalium lines']
+    options['stubborn_transversalium'] = ui_values['Stubborn transversalium']
     options['trans_strength'] = int(ui_values['-trans_strength-']*100) + 1
     options['flip_x'] = ui_values['Mirror X']
     options['img_rotate'] = int(ui_values['img_rotate'])
     serfiles=ui_values['-FILE-'].split(';')
     options['output_dir'] = ui_values['output_dir']
+    if options['output_dir'] and not os.path.isdir(options['output_dir']):
+        raise Exception('ERROR opening output folder :'+options['output_dir'])
     if options['selected_mode'] == 'Folder input mode':
         options['input_dir'] = ui_values['input_dir']
     options['continuous_detect_mode'] = ui_values['Continuous detect mode']
-
+    options['de-vignette'] = ui_values['de-vignette']
     if not no_file:
         if options['selected_mode'] == 'File input mode':
             try:
@@ -126,7 +134,6 @@ def get_img_data(f, maxsize=(30, 18), first=False):
 
 def change_langs(window, popup_messages, lang_dict, flag_change=True):
     flag_ok = 0
-    checkboxes = set(['Show graphics', 'Save fits files', 'Save clahe.png only', 'Crop square', 'Mirror X', 'Correct transversalium lines', 'Continuous detect mode'])
     popup_ids = set(['no_file_error', 'no_folder_error'])
     for k, v in lang_dict.items():
         if k == '_flag_icon':
@@ -139,12 +146,14 @@ def change_langs(window, popup_messages, lang_dict, flag_change=True):
             window['_pixel_offset'].TooltipObject.text = v
         elif k == 'protus_adjustment_tooltip':
             window['_protus_adjustment'].TooltipObject.text = v
+        elif k == 'ellipse_fit_shift_tooltip':
+            window['ellipse_fit_shift'].TooltipObject.text = v
         elif k == '_lang_name':
             pass
         else:
             try:
                 if k in window.AllKeysDict:
-                    if k in checkboxes:
+                    if isinstance(window[k], sg.PySimpleGUI.Checkbox):
                         window[k].update(text=v)
                     else:
                         window[k].update(v)
@@ -188,9 +197,8 @@ def inputUI(options):
 
     layout_base = [
     
-    [sg.Checkbox('Show graphics', default=options['flag_display'], key='Show graphics')],
-    [sg.Checkbox('Save fits files', default=options['save_fit'], key='Save fits files')],
-    [sg.Checkbox('Save clahe.png only', default=options['clahe_only'], key='Save clahe.png only')],
+    [sg.Checkbox('Show graphics', default=options['flag_display'], key='Show graphics'), sg.Checkbox('Save fits files', default=options['save_fit'], key='Save fits files')],
+    [sg.Checkbox('Save clahe.png only', default=options['clahe_only'], key='Save clahe.png only'), sg.Checkbox('Save protus.png only', default=options['protus_only'], key='Save protus.png only')],
     [sg.Checkbox('Crop square', default=options['crop_width_square'], key='Crop square')],
     [sg.Text('Fixed image width (blank for none)', size=(32,1), key='Fixed image width (blank for none)'), sg.Input(default_text=options['fixed_width'], size=(8,1),key='_fixed_width')],
     [sg.Checkbox('Mirror X', default=False, key='Mirror X')],
@@ -202,7 +210,7 @@ def inputUI(options):
          orientation='horizontal',
          font=('Helvetica', 12),
          key='img_rotate')],
-    [sg.Checkbox('Correct transversalium lines', default=options['transversalium'], key='Correct transversalium lines', enable_events=True)],
+    [sg.Checkbox('Correct transversalium lines', default=options['transversalium'], key='Correct transversalium lines', enable_events=True), sg.Checkbox('Stubborn transversalium', default=options['stubborn_transversalium'], key='Stubborn transversalium', visible=options['transversalium']), sg.Checkbox('de-vignette', default=options['de-vignette'], key='de-vignette')],
     [sg.Text("Transversalium correction strength (pixels x 100) :", key='Transversalium correction strength (pixels x 100) :', visible=options['transversalium'])],
     [sg.Slider(range=(0.25,7),
          default_value=options['trans_strength']/100,
@@ -217,6 +225,7 @@ def inputUI(options):
     [sg.Text('Pixel offset',size=(32,1), key='Pixel offset'),sg.Input(default_text='0',size=(8,1),tooltip= "a,b,c will produce images at a, b and c\n x:y:w will produce images starting at x, finishing at y, every w pixels",key='_pixel_offset',enable_events=True),
      sg.Push(), sg.Button("Pixel offset live", key = "Pixel offset live", enable_events=True)],
     [sg.Text('Protus adjustment', size=(32,1), key='Protus adjustment'), sg.Input(default_text=str(options['delta_radius']), size=(8,1), tooltip = 'make the black circle bigger or smaller by inputting an integer', key='_protus_adjustment')],
+    [sg.Text('Ellipse fit shift [advanced]', size=(32,1), key='Ellipse fit shift [advanced]'), sg.Input(default_text=str(options['ellipse_fit_shift']), size=(8,1), tooltip = 'default: 10, use higher value (e.g. 20) for very high dispersion', key='ellipse_fit_shift')],
     [sg.Button('OK'), sg.Cancel(), sg.Push(), sg.Button("Open output folder", key='Open output folder', enable_events=True)]
     ] 
 
@@ -225,7 +234,7 @@ def inputUI(options):
         layout_title + [[tab_group]] + layout_folder_output + layout_base    
     ]  
     
-    window = sg.Window('SHG Version 4.2', layout, finalize=True)
+    window = sg.Window('SHG Version 4.3', layout, finalize=True)
     window.BringToFront()
 
     if options['language'] in langs:
@@ -298,4 +307,5 @@ def inputUI(options):
                     
         
         window.Element('-trans_strength-').Update(visible = values['Correct transversalium lines'])
-        window.Element('Transversalium correction strength (pixels x 100) :').Update(visible = values['Correct transversalium lines'])    
+        window.Element('Transversalium correction strength (pixels x 100) :').Update(visible = values['Correct transversalium lines'])
+        window.Element('Stubborn transversalium').Update(visible = values['Correct transversalium lines'])
