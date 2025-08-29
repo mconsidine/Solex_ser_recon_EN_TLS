@@ -150,7 +150,7 @@ if __name__ == "__main__":
             "raw": f"{apparent_solar_diam:.2f}"  # raw string to use when writing back
         }
 
-        Camera_dictionary = {"ASI1600":{"sensor_pixels":4656,"pixel_size":3.8,"camera_binning":2},
+        Camera_dictionary = {"ASI1600":{"sensor_pixels":4656,"pixel_size":3.8,"camera_binning":1},
                              "ASI174":{"sensor_pixels":1926,"pixel_size":5.86,"camera_binning":1}}
 
         SHG_dictionary = {"Hale":{"clear_ap":3*25.4,
@@ -192,26 +192,26 @@ if __name__ == "__main__":
         tgt_diam_effective = apparent_solar_diam
 
         # scope info
-        clear_ap = SHG_dictionary[SHG]["clear_ap"] #mm
-        native_focal_length = SHG_dictionary[SHG]["native_focal_length"] #663 #mm
+        clear_ap = SHG_dictionary[SHG]["clear_ap"] # mm
+        native_focal_length = SHG_dictionary[SHG]["native_focal_length"] #663 # mm
         barlow_power = SHG_dictionary[SHG]["barlow_power"]
-        focal_length = native_focal_length * barlow_power
-        scope_f_ratio = focal_length / clear_ap
+        eff_focal_length = native_focal_length * barlow_power # mm
+        scope_f_ratio = eff_focal_length / clear_ap
 
         # camera info
         sensor_pixels = Camera_dictionary[CAMERA]["sensor_pixels"]
-        pixel_size = Camera_dictionary[CAMERA]["pixel_size"]
-        sensor_length = sensor_pixels * pixel_size/1000 #mm
+        pixel_size = Camera_dictionary[CAMERA]["pixel_size"] # microns
+        sensor_length = sensor_pixels * pixel_size/1000 # mm
         camera_binning = Camera_dictionary[CAMERA]["camera_binning"]
-        sensor_pixels = sensor_pixels / camera_binning
-        pixel_size = pixel_size * camera_binning
+        eff_sensor_pixels = sensor_pixels / camera_binning
+        eff_pixel_size = pixel_size * camera_binning # microns
 
         # shg info
-        shg_collim_fl = SHG_dictionary[SHG]["shg_collim_fl"]
-        shg_camera_fl = SHG_dictionary[SHG]["shg_camera_fl"]
+        shg_collim_fl = SHG_dictionary[SHG]["shg_collim_fl"] # mm
+        shg_camera_fl = SHG_dictionary[SHG]["shg_camera_fl"] # mm
         shg_magn = shg_camera_fl/shg_collim_fl
-        shg_slit_length = SHG_dictionary[SHG]["shg_slit_length"]
-        shg_slit_width = SHG_dictionary[SHG]["shg_slit_width"]
+        shg_slit_length = SHG_dictionary[SHG]["shg_slit_length"] # mm
+        shg_slit_width = SHG_dictionary[SHG]["shg_slit_width"] # microns
         shg_grating_lpmm = SHG_dictionary[SHG]["shg_grating_lpmm"]
 
         # sw reconstruction info; EXPERIMENTAL
@@ -223,26 +223,35 @@ if __name__ == "__main__":
         tgt_scan_time = tgt_diam_effective/scan_speed #seconds
         print(f"target scan time : {tgt_scan_time} seconds")
 
-        scope_resolution_rayleigh = 1.22*(wvlength*10e-9)*(clear_ap*10e-3)*RAD2ARCSEC
-        print(f"scope resolution : {scope_resolution_rayleigh} arcsecs")
-
-        ##ideal_fps = scan_speed/scope_resolution_rayleigh
+        scope_resolution_rayleigh_radius = 1.22*(wvlength*10e-9)/(clear_ap*10e-3)*RAD2ARCSEC
+        scope_angular_airy_disc_diameter = 2*scope_resolution_rayleigh_radius
+        print(f"airy disc angular diameter : {scope_angular_airy_disc_diameter} arcsec")
+        plate_scale = RAD2ARCSEC/eff_focal_length
+        print(f"plate scale : {plate_scale} arcsec/mm")
+        print(f"angular scale per pixel : {plate_scale*eff_pixel_size/1000}")
+        scope_airy_disc = 2.44 * wvlength*1e-3 * scope_f_ratio #airy disc; microns
+        print(f"scope angular resolution radius : {scope_resolution_rayleigh_radius} arcsecs")
+        print(f"test for frames {tgt_diam_effective/scope_resolution_rayleigh_radius}")
+        print(f"{tgt_diam_effective*ARCSEC2RAD*eff_focal_length/(0.003*25.4)}")
+        print(f"airy disk 1st ring linear diam : {scope_airy_disc} microns")
+        print(f"airy disk diameter in pixels (want 4+-2) : {scope_airy_disc/eff_pixel_size}")
+        ##ideal_fps = scan_speed/scope_resolution_rayleigh_radius
         ##ideal_fps = ideal_fps * ideal_sampling
-        ###ideal_frames = tgt_diam_effective/scope_resolution_rayleigh
+        ###ideal_frames = tgt_diam_effective/scope_resolution_rayleigh_radius
         ##ideal_frames = tgt_scan_time/ideal_fps
 
         ##print(f"\nideal fps : {ideal_fps}")
         ##print(f"ideal frames : {ideal_frames}")
 
-        scope_camera_spatial_resolution = (pixel_size/1000)/focal_length * RAD2ARCSEC
+        scope_camera_spatial_resolution = (eff_pixel_size/1000)/eff_focal_length * RAD2ARCSEC
         print(f"\nsensor_resolution : {scope_camera_spatial_resolution} arcsecs per pixel")
         # this should be 3-7 vs 1????
-        print(f"nominal sampling ratio (ideal scope/scope-camera); want 3-7 : {scope_resolution_rayleigh/scope_camera_spatial_resolution}")
+        print(f"nominal sampling ratio (ideal scope/scope-camera); want 3-7 : {scope_resolution_rayleigh_radius/scope_camera_spatial_resolution}")
 
         print(f"\nideal fps 2: {scan_speed/scope_camera_spatial_resolution}")
         print(f"ideal frames 2: {tgt_diam_effective/scope_camera_spatial_resolution}")
 
-        tgt_diam_effective_mm = (tgt_diam_effective * ARCSEC2RAD) * focal_length
+        tgt_diam_effective_mm = (tgt_diam_effective * ARCSEC2RAD) * eff_focal_length
         print(f"\ntgt diam : {tgt_diam_effective_mm} mm")
         tgt_slit_coverage = shg_slit_length / tgt_diam_effective_mm
         print(f"slit coverage : {tgt_slit_coverage}*100 (ratio)")
@@ -254,7 +263,7 @@ if __name__ == "__main__":
         print(f"estimated actual target frames : {tgt_scan_frames}")
         tgt_scan_resolution = tgt_diam_effective/tgt_scan_frames #arcseconds
         print(f"target actual scan resolution : {tgt_scan_resolution} arcseconds")
-        print(f"actual scan resolution ratio (ideal/actual; >1=need higher fps) : {scope_resolution_rayleigh/tgt_scan_resolution}")
+        print(f"actual scan resolution ratio (ideal/actual; >1=need higher fps) : {scope_resolution_rayleigh_radius/tgt_scan_resolution}")
         print(f"actual resolution ratio (want 1?) : {tgt_scan_resolution/scope_camera_spatial_resolution}")
 
         #for k, v in list(settings.items())[:8]:
