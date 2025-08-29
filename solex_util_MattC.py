@@ -178,26 +178,34 @@ if __name__ == "__main__":
         SHG = "Hale" #MLAstro_MattC
         CAMERA = "ASI1600" #ASI174
 
-        # mount info
+        # mount speed
         scan_mult = 1.0 #multiple of sidereal rate
         # wavelength
         wvlength = 656.28 #nm
-        # target
+        # intended sampling
+        ideal_sampling = 4 #pixels per airy disc
+        # misc
+        RAD2ARCSEC = (180/np.pi)*3600
+        ARCSEC2RAD = 1/RAD2ARCSEC
+
+        # target diameter in arcseconds
         tgt_diam_effective = apparent_solar_diam
+
         # scope info
         clear_ap = SHG_dictionary[SHG]["clear_ap"] #mm
         native_focal_length = SHG_dictionary[SHG]["native_focal_length"] #663 #mm
         barlow_power = SHG_dictionary[SHG]["barlow_power"]
         focal_length = native_focal_length * barlow_power
         scope_f_ratio = focal_length / clear_ap
+
         # camera info
         sensor_pixels = Camera_dictionary[CAMERA]["sensor_pixels"]
         pixel_size = Camera_dictionary[CAMERA]["pixel_size"]
         sensor_length = sensor_pixels * pixel_size/1000 #mm
         camera_binning = Camera_dictionary[CAMERA]["camera_binning"]
-        ideal_sampling = 4 #pixels per airy disc
         sensor_pixels = sensor_pixels / camera_binning
         pixel_size = pixel_size * camera_binning
+
         # shg info
         shg_collim_fl = SHG_dictionary[SHG]["shg_collim_fl"]
         shg_camera_fl = SHG_dictionary[SHG]["shg_camera_fl"]
@@ -205,6 +213,7 @@ if __name__ == "__main__":
         shg_slit_length = SHG_dictionary[SHG]["shg_slit_length"]
         shg_slit_width = SHG_dictionary[SHG]["shg_slit_width"]
         shg_grating_lpmm = SHG_dictionary[SHG]["shg_grating_lpmm"]
+
         # sw reconstruction info; EXPERIMENTAL
         sw_sampling = 1
 
@@ -214,7 +223,7 @@ if __name__ == "__main__":
         tgt_scan_time = tgt_diam_effective/scan_speed #seconds
         print(f"target scan time : {tgt_scan_time} seconds")
 
-        scope_resolution_rayleigh = 1.22*(wvlength*10e-9)*(clear_ap*10e-3)*(180/np.pi)*3600
+        scope_resolution_rayleigh = 1.22*(wvlength*10e-9)*(clear_ap*10e-3)*RAD2ARCSEC
         print(f"scope resolution : {scope_resolution_rayleigh} arcsecs")
 
         ##ideal_fps = scan_speed/scope_resolution_rayleigh
@@ -225,7 +234,7 @@ if __name__ == "__main__":
         ##print(f"\nideal fps : {ideal_fps}")
         ##print(f"ideal frames : {ideal_frames}")
 
-        scope_camera_spatial_resolution = pixel_size * (180*3600/(np.pi*1000))/focal_length
+        scope_camera_spatial_resolution = (pixel_size/1000)/focal_length * RAD2ARCSEC
         print(f"\nsensor_resolution : {scope_camera_spatial_resolution} arcsecs per pixel")
         # this should be 3-7 vs 1????
         print(f"nominal sampling ratio (ideal scope/scope-camera); want 3-7 : {scope_resolution_rayleigh/scope_camera_spatial_resolution}")
@@ -233,7 +242,7 @@ if __name__ == "__main__":
         print(f"\nideal fps 2: {scan_speed/scope_camera_spatial_resolution}")
         print(f"ideal frames 2: {tgt_diam_effective/scope_camera_spatial_resolution}")
 
-        tgt_diam_effective_mm = (tgt_diam_effective/(180*3600/(np.pi))) * focal_length
+        tgt_diam_effective_mm = (tgt_diam_effective * ARCSEC2RAD) * focal_length
         print(f"\ntgt diam : {tgt_diam_effective_mm} mm")
         tgt_slit_coverage = shg_slit_length / tgt_diam_effective_mm
         print(f"slit coverage : {tgt_slit_coverage}*100 (ratio)")
